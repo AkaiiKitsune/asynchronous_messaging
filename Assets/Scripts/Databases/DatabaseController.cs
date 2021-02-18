@@ -2,33 +2,37 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-// Give Access in data
-public class DatabaseController : MonoBehaviour
-{ 
+// Give Access / Interface in data
+// Maage Save, Load and Clear Doublons
+[System.Serializable]
+public class DatabaseController
+{
 	[SerializeField] private Database _database = new Database();
-	[SerializeField] private float _aroundThreshold = 5f;			// Define when a message is near a player
+	[SerializeField] private float _aroundThreshold = 100f;             // Define when a message is near a player
 
-	// Wraper
-	public string[] GetMessagesPremades => _database.MessagesPremades;
-	
-	private MessageComparer _comparer = new MessageComparer();      // To verify doublons
+	public string[] GetMessagesPremades => _database.MessagesPremades;  // Wraper
 
-	private void Awake()
+	private MessageComparer _comparer = new MessageComparer();          // To verify doublons
+
+	public DatabaseController()
 	{
-		LoadDatabase();
-		ClearDoublons();
+		_database = new Database();
+		_aroundThreshold = 100f;
+		_comparer = new MessageComparer();
 	}
 
 	#region ServerInteract
-	public Message[] GetMessagesByPlayerPosition(Vector3 playerPosition)
+	public Messages GetMessagesByPlayerPosition(Vector3 playerPosition)
 	{
 		/// HashSet - Doesn't allow doublons and it's more efficient to add an item (like a List)
 		/// Linq - Take all position in a certain area around the player
 		/// ToArray - HashSet can't be serialize in editor or in a file
-		return new HashSet<Message>(_database.Messages
-								.Where(k => Vector3.Distance(k.GetPositionMessage, playerPosition) < _aroundThreshold),
-								_comparer)
-								.ToArray();
+		Messages messages = new Messages(new HashSet<Message>(_database.Messages
+			.Where(k => Vector3.Distance(k.GetPositionMessage, playerPosition) < _aroundThreshold),
+			_comparer)
+			.ToArray());
+
+		return messages;
 	}
 
 	public void Insert(Message message)
@@ -44,7 +48,7 @@ public class DatabaseController : MonoBehaviour
 
 		if (message.ContainsNullValues || message.IsEmpty)
 		{
-			Logger.Write($"Can't add a Message which contains null values", LogType.ERROR);
+			Logger.Write($"Can't add a Message which contains null or empty values", LogType.ERROR);
 			return;
 		}
 
@@ -60,16 +64,15 @@ public class DatabaseController : MonoBehaviour
 	#endregion
 
 	#region SaveAndLoad
-	[ContextMenu("Save Database")]
 	public void SaveDatabase()
 	{
 		Logger.Write("Save Database...");
+
 		string jsonData = JsonUtility.ToJson(_database, true);
 		FileManagement.Write(FileNameConst.DATABASE, jsonData);
 	}
 
 	// Load Database
-	[ContextMenu("Load Database")]
 	public void LoadDatabase()
 	{
 		Logger.Write("Load Database...");
@@ -83,10 +86,9 @@ public class DatabaseController : MonoBehaviour
 		_database = JsonUtility.FromJson<Database>(jsonData);
 	}
 
-	[ContextMenu("Clear Doublons")]
 	public void ClearDoublons()
 	{
-		Logger.Write("Clear Doublons");
+		Logger.Write("Clear Doublons...");
 
 		//HashSet delete doublons, produce less garbage collector than Linq
 		List<Message> messages = new HashSet<Message>(_database.Messages, _comparer).ToList();
